@@ -1,0 +1,218 @@
+.MODEL SMALL
+.STACK 100H
+
+.DATA
+    titulo      DB 13,10,'CALCULADORA HEXADECIMAL',13,10,'$'
+    msg_num1    DB 13,10,'Ingrese el primer numero (00-FF): $'
+    msg_op      DB 13,10,'Ingrese el operador (+ o -): $'
+    msg_num2    DB 13,10,'Ingrese el segundo numero (00-FF): $'
+    msg_res     DB 13,10,'Resultado hexadecimal: $'
+    msg_ind     DB 13,10,'Indicador (acarreo/prestamo): $'
+    msg_error   DB 13,10,'Operador no valido.$'
+    msg_hex_err DB 13,10,'Numero hexadecimal no valido.$'
+    salto       DB 13,10,'$'
+
+    numero1     DB ?
+    numero2     DB ?
+    resultado   DB ?
+    indicador   DB ?
+    temporal    DB ?
+
+.CODE
+
+MAIN PROC
+    MOV AX, @DATA
+    MOV DS, AX
+
+    ; Mostrar titulo
+    MOV AH, 09H
+    LEA DX, titulo
+    INT 21H
+
+    ; Pedir primer numero
+    MOV AH, 09H
+    LEA DX, msg_num1
+    INT 21H
+    CALL LEER_HEX
+    MOV numero1, AL
+
+    ; Pedir operador
+    MOV AH, 09H
+    LEA DX, msg_op
+    INT 21H
+    MOV AH, 01H
+    INT 21H
+    MOV BL, AL
+
+    ; Pedir segundo numero
+    MOV AH, 09H
+    LEA DX, msg_num2
+    INT 21H
+    CALL LEER_HEX
+    MOV numero2, AL
+
+    ; Validar operador
+    CMP BL, '+'
+    JE SUMAR
+    CMP BL, '-'
+    JE RESTAR
+    JMP OPERADOR_INVALIDO
+
+SUMAR:
+    MOV AL, numero1
+    ADD AL, numero2
+    MOV resultado, AL
+
+    ; Si hubo acarreo, CF = 1
+    JC ACARREO
+    MOV indicador, 0
+    JMP MOSTRAR
+
+ACARREO:
+    MOV indicador, 1
+    JMP MOSTRAR
+
+RESTAR:
+    MOV AL, numero1
+    SUB AL, numero2
+    MOV resultado, AL
+
+    ; Si hubo prestamo, CF = 1
+    JC PRESTAMO
+    MOV indicador, 0
+    JMP MOSTRAR
+
+PRESTAMO:
+    MOV indicador, 1
+    JMP MOSTRAR
+
+MOSTRAR:
+    MOV AH, 09H
+    LEA DX, msg_res
+    INT 21H
+
+    MOV AL, resultado
+    CALL IMPRIMIR_HEX
+
+    MOV AH, 09H
+    LEA DX, msg_ind
+    INT 21H
+
+    MOV AL, indicador
+    CALL IMPRIMIR_DIGITO
+
+    MOV AH, 09H
+    LEA DX, salto
+    INT 21H
+    JMP FINALIZAR
+
+OPERADOR_INVALIDO:
+    MOV AH, 09H
+    LEA DX, msg_error
+    INT 21H
+    JMP FINALIZAR
+
+FINALIZAR:
+    MOV AH, 4CH
+    INT 21H
+MAIN ENDP
+
+; ----------------------------------------------------
+; Lee un byte hexadecimal de dos digitos
+; Ejemplo: 1A -> 0x1A
+; ----------------------------------------------------
+LEER_HEX PROC
+    CALL LEER_DIGITO
+    MOV temporal, AL
+    SHL temporal, 4
+
+    CALL LEER_DIGITO
+    MOV AH, temporal
+    OR AL, AH
+    RET
+LEER_HEX ENDP
+
+; ----------------------------------------------------
+; Lee un digito hexadecimal 0-9, A-F, a-f
+; Devuelve en AL el valor 0..15
+; ----------------------------------------------------
+LEER_DIGITO PROC
+    MOV AH, 01H
+    INT 21H
+
+    ; Numero 0..9
+    CMP AL, '0'
+    JB DIGITO_INVALIDO
+    CMP AL, '9'
+    JBE DIGITO_NUMERO
+
+    ; Letra A..F
+    CMP AL, 'A'
+    JB DIGITO_INVALIDO
+    CMP AL, 'F'
+    JBE DIGITO_MAYUSCULA
+
+    ; Letra a..f
+    CMP AL, 'a'
+    JB DIGITO_INVALIDO
+    CMP AL, 'f'
+    JBE DIGITO_MINUSCULA
+
+DIGITO_INVALIDO:
+    MOV AH, 09H
+    LEA DX, msg_hex_err
+    INT 21H
+    MOV AH, 4CH
+    INT 21H
+
+DIGITO_NUMERO:
+    SUB AL, '0'
+    RET
+
+DIGITO_MAYUSCULA:
+    SUB AL, 'A'
+    ADD AL, 10
+    RET
+
+DIGITO_MINUSCULA:
+    SUB AL, 'a'
+    ADD AL, 10
+    RET
+LEER_DIGITO ENDP
+
+; ----------------------------------------------------
+; Imprime un byte hexadecimal
+; Ejemplo: 0x1A => "1A"
+; ----------------------------------------------------
+IMPRIMIR_HEX PROC
+    PUSH AX
+
+    MOV AH, AL
+    SHR AL, 4
+    CALL IMPRIMIR_DIGITO
+
+    POP AX
+    AND AL, 0FH
+    CALL IMPRIMIR_DIGITO
+
+    RET
+IMPRIMIR_HEX ENDP
+
+; ----------------------------------------------------
+; Imprime un digito hexadecimal (0..15)
+; ----------------------------------------------------
+IMPRIMIR_DIGITO PROC
+    CMP AL, 9
+    JBE NUMERO
+
+    ADD AL, 7
+
+NUMERO:
+    ADD AL, '0'
+    MOV DL, AL
+    MOV AH, 02H
+    INT 21H
+    RET
+IMPRIMIR_DIGITO ENDP
+
+END MAIN
